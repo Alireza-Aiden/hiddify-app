@@ -11,6 +11,8 @@ import 'package:hiddify/features/proxy/model/ip_info_entity.dart' as oldipinfo;
 import 'package:hiddify/features/proxy/model/proxy_failure.dart';
 import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
 
+import 'package:hiddify/core/caching/benchmark_cache_manager.dart';
+import 'package:hiddify/features/proxy/overview/proxies_overview_notifier.dart';
 import 'package:hiddify/utils/riverpod_utils.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -93,6 +95,13 @@ class ActiveProxyNotifier extends _$ActiveProxyNotifier with AppLogger {
 
   Future<void> urlTest(String? groupTag_) async {
     final groupTag = groupTag_ ?? "";
+
+    final cacheManager = ref.read(benchmarkCacheManagerProvider);
+    if (!await cacheManager.shouldBenchmark(groupTag)) {
+      loggy.info("skipping ActiveProxy urlTest for [$groupTag] due to battery save or recent cache");
+      return;
+    }
+
     _urlTestThrottler(() async {
       if (state case AsyncData()) {
         await ref.read(hapticServiceProvider.notifier).lightImpact();
@@ -100,6 +109,7 @@ class ActiveProxyNotifier extends _$ActiveProxyNotifier with AppLogger {
           loggy.warning("error testing group", err);
           throw err;
         }).run();
+        cacheManager.updateCache(groupTag, 0);
       }
     });
   }
