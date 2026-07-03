@@ -11,6 +11,7 @@ import 'package:hiddify/features/proxy/data/proxy_data_providers.dart';
 import 'package:hiddify/features/proxy/model/proxy_failure.dart';
 import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
 
+import 'package:hiddify/core/caching/benchmark_cache_manager.dart';
 import 'package:hiddify/utils/riverpod_utils.dart';
 import 'package:hiddify/utils/utils.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -218,6 +219,11 @@ class ProxiesOverviewNotifier extends _$ProxiesOverviewNotifier with AppLogger {
   }
 
   Future<void> urlTest(String groupTag) async {
+    final cacheManager = ref.read(benchmarkCacheManagerProvider);
+    if (!await cacheManager.shouldBenchmark(groupTag)) {
+      loggy.info("skipping test group: [$groupTag] due to battery save or recent cache");
+      return;
+    }
     loggy.debug("testing group: [$groupTag]");
     if (state case AsyncData()) {
       await ref.read(hapticServiceProvider.notifier).lightImpact();
@@ -225,6 +231,7 @@ class ProxiesOverviewNotifier extends _$ProxiesOverviewNotifier with AppLogger {
         loggy.error("error testing group", err);
         throw err;
       }).run();
+      cacheManager.updateCache(groupTag, 0); // we could store actual delay if returned
     }
   }
 }
