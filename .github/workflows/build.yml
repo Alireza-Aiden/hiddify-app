@@ -387,8 +387,10 @@ jobs:
           
 
       - name: Display Files Structure
-        run: ls -R
-        working-directory: ./out
+        run: |
+          mkdir -p out
+          ls -R
+        working-directory: ./
 
       - name: Delete Current Release Assets
         uses: 8Mi-Tech/delete-release-assets-action@main
