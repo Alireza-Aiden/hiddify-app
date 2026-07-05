@@ -309,6 +309,10 @@ jobs:
           cp ./build/app/outputs/flutter-apk/*armeabi-v7a*.apk out/${TARGET_NAME_apk}-arm7.apk || echo "no arm7 apk"
           cp ./build/app/outputs/flutter-apk/*x86_64*.apk out/${TARGET_NAME_apk}-x86_64.apk || echo "no x64 apk"
           cp ./build/app/outputs/flutter-apk/app-release.apk out/${TARGET_NAME_apk}-universal.apk || echo "no universal apk"
+          cp ./build/app/outputs/apk/release/*arm64-v8a*.apk out/${TARGET_NAME_apk}-arm64.apk || echo "no arm64 apk in release"
+          cp ./build/app/outputs/apk/release/*armeabi-v7a*.apk out/${TARGET_NAME_apk}-arm7.apk || echo "no arm7 apk in release"
+          cp ./build/app/outputs/apk/release/*x86_64*.apk out/${TARGET_NAME_apk}-x86_64.apk || echo "no x64 apk in release"
+          cp ./build/app/outputs/apk/release/app-release.apk out/${TARGET_NAME_apk}-universal.apk || echo "no universal apk in release"
 
       - name: Copy to out Android AAB
         if: matrix.platform == 'android-aab'
