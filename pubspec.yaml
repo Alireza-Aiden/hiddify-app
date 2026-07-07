@@ -120,6 +120,13 @@ dependencies:
   # Used for registering custom schemes in the Windows registry
   win32: ^5.12.0
   humanizer: ^3.0.1
+  battery_plus: ^7.1.0
+  code_assets: ^1.2.1
+  hooks: ^2.0.2
+  record_use: ^0.6.0
+  upower: ^0.7.0
+  dart_ping: ^9.0.0
+  dart_ping_ios: ^4.0.0
 
 dev_dependencies:
   # flutter_test:

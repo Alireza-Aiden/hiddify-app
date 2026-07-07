@@ -8,6 +8,7 @@ import 'package:hiddify/features/connection/data/connection_data_providers.dart'
 import 'package:hiddify/features/connection/data/connection_repository.dart';
 import 'package:hiddify/features/connection/model/connection_failure.dart';
 import 'package:hiddify/features/connection/model/connection_status.dart';
+import 'package:hiddify/core/diagnostics/smart_diagnostics_service.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
 import 'package:hiddify/features/profile/notifier/active_profile_notifier.dart';
 import 'package:hiddify/hiddifycore/init_signal.dart';
@@ -19,6 +20,11 @@ import 'package:rxdart/rxdart.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
 part 'connection_notifier.g.dart';
+
+@Riverpod(keepAlive: true)
+SmartDiagnosticsService smartDiagnosticsService(SmartDiagnosticsServiceRef ref) {
+  return SmartDiagnosticsService();
+}
 
 @Riverpod(keepAlive: true)
 class ConnectionNotifier extends _$ConnectionNotifier with AppLogger {
@@ -145,10 +151,29 @@ class ConnectionNotifier extends _$ConnectionNotifier with AppLogger {
       ConnectionFailure err,
     ) async {
       loggy.warning("error connecting", err);
-      //Go err is not normal object to see the go errors are string and need to be dumped
-      await ref
-          .read(dialogNotifierProvider.notifier)
-          .showCustomAlertFromErr(err.present(ref.read(translationsProvider).requireValue));
+
+      // Perform Smart Diagnostics
+      try {
+        final diagnostics = await ref.read(smartDiagnosticsServiceProvider).analyzeConnectionError(err, null);
+        if (diagnostics.isNotEmpty) {
+          final diagMsg = diagnostics.map((d) => "${d.description}\nSuggestion: ${d.suggestion}").join("\n\n");
+          final originalErr = err.present(ref.read(translationsProvider).requireValue);
+          final updatedMsg = "${originalErr.message ?? 'Unknown error'}\n\nDiagnostics:\n$diagMsg";
+          await ref.read(dialogNotifierProvider.notifier).showCustomAlertFromErr(
+                (type: originalErr.type, message: updatedMsg)
+              );
+        } else {
+          await ref.read(dialogNotifierProvider.notifier).showCustomAlertFromErr(
+                err.present(ref.read(translationsProvider).requireValue)
+              );
+        }
+      } catch (e) {
+        loggy.warning("Diagnostics failed", e);
+        await ref
+            .read(dialogNotifierProvider.notifier)
+            .showCustomAlertFromErr(err.present(ref.read(translationsProvider).requireValue));
+      }
+
       loggy.warning(err);
       if (err.toString().contains("panic")) {
         await Sentry.captureException(Exception(err.toString()));
