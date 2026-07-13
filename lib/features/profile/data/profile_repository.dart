@@ -235,7 +235,7 @@ class ProfileRepositoryImpl with ExceptionHandler, InfraLogger implements Profil
                 TaskEither.fromEither(
                   _profileParser.offlineUpdate(
                     profile: oProfile.copyWith(userOverride: profile.userOverride),
-                    tempFilePath: tempFile.path,
+                    content: nContent,
                   ),
                 ).flatMap(
                   (profEntity) =>
