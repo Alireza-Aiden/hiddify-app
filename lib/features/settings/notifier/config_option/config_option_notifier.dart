@@ -165,9 +165,7 @@ class ConfigOptionNotifier extends _$ConfigOptionNotifier with AppLogger {
   }
 
   Future<void> resetOption() async {
-    for (final option in ConfigOptions.preferences.values) {
-      await ref.read(option.notifier).reset();
-    }
+    await Future.wait(ConfigOptions.preferences.values.map((option) => ref.read(option.notifier).reset()));
     ref.invalidateSelf();
   }
 }
