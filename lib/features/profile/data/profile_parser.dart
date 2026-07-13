@@ -66,29 +66,30 @@ class ProfileParser {
     required UserOverride? userOverride,
   }) {
     return TaskEither.tryCatch(() async {
-          await expandRemoteLinesInParallel(
-            tempFilePath: tempFilePath,
-            httpClient: _httpClient,
-            cancelToken: CancelToken(),
-            ref: _ref,
-          );
-        }, (_, _) => const ProfileFailure.unexpected())
-        .flatMap((_) => TaskEither.fromEither(populateHeaders(content: content)))
-        .flatMap(
-          (populatedHeaders) => TaskEither.fromEither(
-            parse(
-              tempFilePath: tempFilePath,
-              profile: ProfileEntity.local(
-                id: id,
-                active: true,
-                name: '',
-                lastUpdate: DateTime.now(),
-                userOverride: userOverride,
-                populatedHeaders: populatedHeaders,
-              ),
-            ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
-          ),
-        );
+      await expandRemoteLinesInParallel(
+        tempFilePath: tempFilePath,
+        httpClient: _httpClient,
+        cancelToken: CancelToken(),
+        ref: _ref,
+      );
+      return await File(tempFilePath).readAsString();
+    }, (err, st) => ProfileFailure.unexpected(err, st)).flatMap(
+      (expandedContent) => TaskEither.fromEither(populateHeaders(content: expandedContent)).flatMap(
+        (populatedHeaders) => TaskEither.fromEither(
+          parse(
+            content: expandedContent,
+            profile: ProfileEntity.local(
+              id: id,
+              active: true,
+              name: '',
+              lastUpdate: DateTime.now(),
+              userOverride: userOverride,
+              populatedHeaders: populatedHeaders,
+            ),
+          ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
+        ),
+      ),
+    );
   }
 
   TaskEither<ProfileFailure, ProfileEntriesCompanion> addRemote({
@@ -97,14 +98,18 @@ class ProfileParser {
     required String tempFilePath,
     required UserOverride? userOverride,
     CancelToken? cancelToken,
-  }) => _downloadProfile(url, tempFilePath, cancelToken).flatMap(
-    (remoteHeaders) =>
-        TaskEither.fromEither(
-          populateHeaders(content: File(tempFilePath).readAsStringSync(), remoteHeaders: remoteHeaders),
-        ).flatMap(
+  }) => _downloadProfile(url, tempFilePath, cancelToken)
+      .flatMap(
+        (remoteHeaders) => TaskEither.tryCatch(
+          () => File(tempFilePath).readAsString(),
+          (err, st) => ProfileFailure.unexpected(err, st),
+        ).map((content) => (remoteHeaders, content)),
+      )
+      .flatMap(
+        (tuple) => TaskEither.fromEither(populateHeaders(content: tuple.$2, remoteHeaders: tuple.$1)).flatMap(
           (populatedHeaders) => TaskEither.fromEither(
             parse(
-              tempFilePath: tempFilePath,
+              content: tuple.$2,
               profile: ProfileEntity.remote(
                 id: id,
                 active: true,
@@ -117,33 +122,37 @@ class ProfileParser {
             ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
           ),
         ),
-  );
+      );
 
   TaskEither<ProfileFailure, ProfileEntriesCompanion> updateRemote({
     required RemoteProfileEntity rp,
     required String tempFilePath,
     CancelToken? cancelToken,
-  }) => _downloadProfile(rp.url, tempFilePath, cancelToken).flatMap(
-    (remoteHeaders) =>
-        TaskEither.fromEither(
-          populateHeaders(content: File(tempFilePath).readAsStringSync(), remoteHeaders: remoteHeaders),
-        ).flatMap(
+  }) => _downloadProfile(rp.url, tempFilePath, cancelToken)
+      .flatMap(
+        (remoteHeaders) => TaskEither.tryCatch(
+          () => File(tempFilePath).readAsString(),
+          (err, st) => ProfileFailure.unexpected(err, st),
+        ).map((content) => (remoteHeaders, content)),
+      )
+      .flatMap(
+        (tuple) => TaskEither.fromEither(populateHeaders(content: tuple.$2, remoteHeaders: tuple.$1)).flatMap(
           (populatedHeaders) => TaskEither.fromEither(
             parse(
-              tempFilePath: tempFilePath,
+              content: tuple.$2,
               profile: rp.copyWith(populatedHeaders: populatedHeaders),
             ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toUpdateEntry(), ProfileFailure.unexpected)),
           ),
         ),
-  );
+      );
 
   Either<ProfileFailure, ProfileEntriesCompanion> offlineUpdate({
     required ProfileEntity profile,
-    required String tempFilePath,
+    required String content,
   }) => profile
       .map(
-        remote: (rp) => parse(profile: rp, tempFilePath: tempFilePath),
-        local: (lp) => parse(tempFilePath: tempFilePath, profile: lp),
+        remote: (rp) => parse(profile: rp, content: content),
+        local: (lp) => parse(content: content, profile: lp),
       )
       .flatMap((profEntity) => Either.tryCatch(() => profEntity.toUpdateEntry(), ProfileFailure.unexpected));
 
@@ -303,7 +312,7 @@ class ProfileParser {
   }
 
   @visibleForTesting
-  static Either<ProfileFailure, ProfileEntity> parse({required String tempFilePath, required ProfileEntity profile}) =>
+  static Either<ProfileFailure, ProfileEntity> parse({required String content, required ProfileEntity profile}) =>
       Either.tryCatch(() {
         final headers = Map<String, dynamic>.from(profile.populatedHeaders ?? {});
         var name = '';
@@ -340,7 +349,7 @@ class ProfileParser {
               name = "Remote Profile";
 
             case LocalProfileEntity():
-              name = protocol(File(tempFilePath).readAsStringSync());
+              name = protocol(content);
           }
         }
 
