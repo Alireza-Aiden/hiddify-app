@@ -116,18 +116,16 @@ class IpInfo with IpInfoMappable {
     };
   }
 
-  static IpInfo fromGeolocationDbComJson(Map<String, dynamic> json) {
+  static IpInfo fromDbIpJson(Map<String, dynamic> json) {
     return switch (json) {
       {
-        "ip": final String ip,
-        "country_code": final String countryCode,
-        // "state": final String region,
+        "ipAddress": final String ip,
+        "countryCode": final String countryCode,
         "city": final String city,
       } =>
         IpInfo(
           ip: ip,
           countryCode: countryCode,
-          // region: region,
           city: city,
         ),
       _ => throw const FormatException("invalid json"),
