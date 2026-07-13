@@ -75,19 +75,21 @@ class ProfileParser {
         }, (_, _) => const ProfileFailure.unexpected())
         .flatMap((_) => TaskEither.fromEither(populateHeaders(content: content)))
         .flatMap(
-          (populatedHeaders) => TaskEither.fromEither(
-            parse(
-              tempFilePath: tempFilePath,
-              profile: ProfileEntity.local(
-                id: id,
-                active: true,
-                name: '',
-                lastUpdate: DateTime.now(),
-                userOverride: userOverride,
-                populatedHeaders: populatedHeaders,
+          (populatedHeaders) =>
+              parse(
+                tempFilePath: tempFilePath,
+                profile: ProfileEntity.local(
+                  id: id,
+                  active: true,
+                  name: '',
+                  lastUpdate: DateTime.now(),
+                  userOverride: userOverride,
+                  populatedHeaders: populatedHeaders,
+                ),
+              ).flatMap(
+                (profEntity) =>
+                    TaskEither.fromEither(Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
               ),
-            ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
-          ),
         );
   }
 
@@ -98,24 +100,27 @@ class ProfileParser {
     required UserOverride? userOverride,
     CancelToken? cancelToken,
   }) => _downloadProfile(url, tempFilePath, cancelToken).flatMap(
-    (remoteHeaders) =>
-        TaskEither.fromEither(
-          populateHeaders(content: File(tempFilePath).readAsStringSync(), remoteHeaders: remoteHeaders),
-        ).flatMap(
-          (populatedHeaders) => TaskEither.fromEither(
-            parse(
-              tempFilePath: tempFilePath,
-              profile: ProfileEntity.remote(
-                id: id,
-                active: true,
-                name: '',
-                url: url,
-                lastUpdate: DateTime.now(),
-                userOverride: userOverride,
-                populatedHeaders: populatedHeaders,
+    (
+      remoteHeaders,
+    ) => TaskEither.tryCatch(() => File(tempFilePath).readAsString(), (_, _) => const ProfileFailure.unexpected())
+        .flatMap((content) => TaskEither.fromEither(populateHeaders(content: content, remoteHeaders: remoteHeaders)))
+        .flatMap(
+          (populatedHeaders) =>
+              parse(
+                tempFilePath: tempFilePath,
+                profile: ProfileEntity.remote(
+                  id: id,
+                  active: true,
+                  name: '',
+                  url: url,
+                  lastUpdate: DateTime.now(),
+                  userOverride: userOverride,
+                  populatedHeaders: populatedHeaders,
+                ),
+              ).flatMap(
+                (profEntity) =>
+                    TaskEither.fromEither(Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
               ),
-            ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toInsertEntry(), ProfileFailure.unexpected)),
-          ),
         ),
   );
 
@@ -124,20 +129,23 @@ class ProfileParser {
     required String tempFilePath,
     CancelToken? cancelToken,
   }) => _downloadProfile(rp.url, tempFilePath, cancelToken).flatMap(
-    (remoteHeaders) =>
-        TaskEither.fromEither(
-          populateHeaders(content: File(tempFilePath).readAsStringSync(), remoteHeaders: remoteHeaders),
-        ).flatMap(
-          (populatedHeaders) => TaskEither.fromEither(
-            parse(
-              tempFilePath: tempFilePath,
-              profile: rp.copyWith(populatedHeaders: populatedHeaders),
-            ).flatMap((profEntity) => Either.tryCatch(() => profEntity.toUpdateEntry(), ProfileFailure.unexpected)),
-          ),
+    (
+      remoteHeaders,
+    ) => TaskEither.tryCatch(() => File(tempFilePath).readAsString(), (_, _) => const ProfileFailure.unexpected())
+        .flatMap((content) => TaskEither.fromEither(populateHeaders(content: content, remoteHeaders: remoteHeaders)))
+        .flatMap(
+          (populatedHeaders) =>
+              parse(
+                tempFilePath: tempFilePath,
+                profile: rp.copyWith(populatedHeaders: populatedHeaders),
+              ).flatMap(
+                (profEntity) =>
+                    TaskEither.fromEither(Either.tryCatch(() => profEntity.toUpdateEntry(), ProfileFailure.unexpected)),
+              ),
         ),
   );
 
-  Either<ProfileFailure, ProfileEntriesCompanion> offlineUpdate({
+  TaskEither<ProfileFailure, ProfileEntriesCompanion> offlineUpdate({
     required ProfileEntity profile,
     required String tempFilePath,
   }) => profile
@@ -145,7 +153,10 @@ class ProfileParser {
         remote: (rp) => parse(profile: rp, tempFilePath: tempFilePath),
         local: (lp) => parse(tempFilePath: tempFilePath, profile: lp),
       )
-      .flatMap((profEntity) => Either.tryCatch(() => profEntity.toUpdateEntry(), ProfileFailure.unexpected));
+      .flatMap(
+        (profEntity) =>
+            TaskEither.fromEither(Either.tryCatch(() => profEntity.toUpdateEntry(), ProfileFailure.unexpected)),
+      );
 
   TaskEither<ProfileFailure, Map<String, dynamic>> _downloadProfile(
     String url,
@@ -303,78 +314,80 @@ class ProfileParser {
   }
 
   @visibleForTesting
-  static Either<ProfileFailure, ProfileEntity> parse({required String tempFilePath, required ProfileEntity profile}) =>
-      Either.tryCatch(() {
-        final headers = Map<String, dynamic>.from(profile.populatedHeaders ?? {});
-        var name = '';
-        if (profile.userOverride?.name case final String oName when oName.isNotEmpty) {
-          name = oName;
-        }
+  static TaskEither<ProfileFailure, ProfileEntity> parse({
+    required String tempFilePath,
+    required ProfileEntity profile,
+  }) => TaskEither.tryCatch(() async {
+    final headers = Map<String, dynamic>.from(profile.populatedHeaders ?? {});
+    var name = '';
+    if (profile.userOverride?.name case final String oName when oName.isNotEmpty) {
+      name = oName;
+    }
 
-        if (headers['profile-title'] case final String titleHeader when name.isEmpty) {
-          if (titleHeader.startsWith("base64:")) {
-            name = utf8.decode(base64.decode(titleHeader.replaceFirst("base64:", "")));
-          } else {
-            name = titleHeader.trim();
-          }
-        }
-        if (headers['content-disposition'] case final String contentDispositionHeader when name.isEmpty) {
-          final regExp = RegExp('filename="([^"]*)"');
-          final match = regExp.firstMatch(contentDispositionHeader);
-          if (match != null && match.groupCount >= 1) {
-            name = match.group(1) ?? '';
-          }
-        }
-        if (profile case RemoteProfileEntity(:final url)) {
-          if (Uri.parse(url).fragment case final fragment when name.isEmpty) {
-            name = fragment;
-          }
-          if (url.split("/").lastOrNull case final part? when name.isEmpty) {
-            final pattern = RegExp(r"\.(json|yaml|yml|txt)[\s\S]*");
-            name = part.replaceFirst(pattern, "");
-          }
-        }
-        if (name.isBlank) {
-          switch (profile) {
-            case RemoteProfileEntity():
-              name = "Remote Profile";
+    if (headers['profile-title'] case final String titleHeader when name.isEmpty) {
+      if (titleHeader.startsWith("base64:")) {
+        name = utf8.decode(base64.decode(titleHeader.replaceFirst("base64:", "")));
+      } else {
+        name = titleHeader.trim();
+      }
+    }
+    if (headers['content-disposition'] case final String contentDispositionHeader when name.isEmpty) {
+      final regExp = RegExp('filename="([^"]*)"');
+      final match = regExp.firstMatch(contentDispositionHeader);
+      if (match != null && match.groupCount >= 1) {
+        name = match.group(1) ?? '';
+      }
+    }
+    if (profile case RemoteProfileEntity(:final url)) {
+      if (Uri.parse(url).fragment case final fragment when name.isEmpty) {
+        name = fragment;
+      }
+      if (url.split("/").lastOrNull case final part? when name.isEmpty) {
+        final pattern = RegExp(r"\.(json|yaml|yml|txt)[\s\S]*");
+        name = part.replaceFirst(pattern, "");
+      }
+    }
+    if (name.isBlank) {
+      switch (profile) {
+        case RemoteProfileEntity():
+          name = "Remote Profile";
 
-            case LocalProfileEntity():
-              name = protocol(File(tempFilePath).readAsStringSync());
-          }
-        }
+        case LocalProfileEntity():
+          name = protocol(await File(tempFilePath).readAsString());
+      }
+    }
 
-        final isAutoUpdateDisable = profile.userOverride?.isAutoUpdateDisable ?? false;
-        ProfileOptions? options;
-        if (profile.userOverride?.updateInterval case final int updateInterval
-            when updateInterval > 0 && !isAutoUpdateDisable) {
-          options = ProfileOptions(updateInterval: Duration(hours: updateInterval));
-        }
-        if (headers['profile-update-interval'] case final String updateIntervalStr
-            when options == null && !isAutoUpdateDisable) {
-          final updateInterval = Duration(hours: int.parse(updateIntervalStr));
-          options = ProfileOptions(updateInterval: updateInterval);
-        }
+    final isAutoUpdateDisable = profile.userOverride?.isAutoUpdateDisable ?? false;
+    ProfileOptions? options;
+    if (profile.userOverride?.updateInterval case final int updateInterval
+        when updateInterval > 0 && !isAutoUpdateDisable) {
+      options = ProfileOptions(updateInterval: Duration(hours: updateInterval));
+    }
+    if (headers['profile-update-interval'] case final String updateIntervalStr
+        when options == null && !isAutoUpdateDisable) {
+      final updateInterval = Duration(hours: int.parse(updateIntervalStr));
+      options = ProfileOptions(updateInterval: updateInterval);
+    }
 
-        SubscriptionInfo? subInfo;
-        if (headers['subscription-userinfo'] case final String subInfoStr) {
-          subInfo = _parseSubscriptionInfo(subInfoStr);
-        }
+    SubscriptionInfo? subInfo;
+    if (headers['subscription-userinfo'] case final String subInfoStr) {
+      subInfo = _parseSubscriptionInfo(subInfoStr);
+    }
 
-        if (subInfo != null) {
-          if (headers['profile-web-page-url'] case final String profileWebPageUrl when isUrl(profileWebPageUrl)) {
-            subInfo = subInfo.copyWith(webPageUrl: profileWebPageUrl);
-          }
-          if (headers['support-url'] case final String profileSupportUrl when isUrl(profileSupportUrl)) {
-            subInfo = subInfo.copyWith(supportUrl: profileSupportUrl);
-          }
-        }
+    if (subInfo != null) {
+      if (headers['profile-web-page-url'] case final String profileWebPageUrl when isUrl(profileWebPageUrl)) {
+        subInfo = subInfo.copyWith(webPageUrl: profileWebPageUrl);
+      }
+      if (headers['support-url'] case final String profileSupportUrl when isUrl(profileSupportUrl)) {
+        subInfo = subInfo.copyWith(supportUrl: profileSupportUrl);
+      }
+    }
 
-        return profile.map(
-          remote: (rp) => rp.copyWith(name: name, lastUpdate: DateTime.now(), options: options, subInfo: subInfo),
-          local: (lp) => lp.copyWith(name: name, lastUpdate: DateTime.now()),
-        );
-      }, ProfileFailure.unexpected);
+    return profile.map(
+      remote: (rp) => rp.copyWith(name: name, lastUpdate: DateTime.now(), options: options, subInfo: subInfo),
+      local: (lp) => lp.copyWith(name: name, lastUpdate: DateTime.now()),
+    );
+  }, ProfileFailure.unexpected);
 
   static String protocol(String content) {
     if (content.contains("[Interface]")) {

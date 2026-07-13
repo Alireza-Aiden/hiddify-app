@@ -136,11 +136,12 @@ class ProfileRepositoryImpl with ExceptionHandler, InfraLogger implements Profil
         try {
           if (profEntity != null && profEntity is RemoteProfileEntity) {
             // Update
+            var updatedProfEntity = profEntity;
             if (userOverride != null) {
-              profEntity = profEntity.copyWith(userOverride: userOverride);
+              updatedProfEntity = profEntity.copyWith(userOverride: userOverride);
             }
             return _profileParser
-                .updateRemote(rp: profEntity, tempFilePath: tempFile.path, cancelToken: cancelToken)
+                .updateRemote(rp: updatedProfEntity, tempFilePath: tempFile.path, cancelToken: cancelToken)
                 .flatMap(
                   (profEntity) =>
                       validateConfig(
@@ -231,13 +232,12 @@ class ProfileRepositoryImpl with ExceptionHandler, InfraLogger implements Profil
             () async => await tempFile.writeAsString(nContent),
             ProfileFailure.unexpected,
           ).flatMap(
-            (_) =>
-                TaskEither.fromEither(
-                  _profileParser.offlineUpdate(
-                    profile: oProfile.copyWith(userOverride: profile.userOverride),
-                    tempFilePath: tempFile.path,
-                  ),
-                ).flatMap(
+            (_) => _profileParser
+                .offlineUpdate(
+                  profile: oProfile.copyWith(userOverride: profile.userOverride),
+                  tempFilePath: tempFile.path,
+                )
+                .flatMap(
                   (profEntity) =>
                       validateConfig(
                         file.path,
