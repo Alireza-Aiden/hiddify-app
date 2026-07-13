@@ -22,7 +22,6 @@ void main() {
       ).run();
       expect(profileResult.isRight(), true);
       profileResult.match((l) {}, (r) {
-        expect(r is RemoteProfileEntity, true);
         r.map(
           remote: (rp) {
             expect(rp.name, equals("filename"));
@@ -48,7 +47,6 @@ void main() {
       ).run();
       expect(profileResult.isRight(), true);
       profileResult.match((l) {}, (r) {
-        expect(r is RemoteProfileEntity, true);
         r.map(
           remote: (rp) {
             expect(rp.name, equals("b"));
@@ -92,7 +90,6 @@ void main() {
         ).run();
         expect(profileResult.isRight(), true);
         profileResult.match((l) {}, (r) {
-          expect(r is RemoteProfileEntity, true);
           r.map(
             remote: (rp) {
               expect(rp.name, equals("exampleTitle"));
@@ -136,7 +133,7 @@ void main() {
       await allHeaders.match((l) async {}, (r) async {
         final profileResult = await ProfileParser.parse(
           tempFilePath: '',
-          profile: RemoteProfileEntity(
+          profile: ProfileEntity.remote(
             id: const Uuid().v4(),
             active: true,
             name: '',
@@ -147,7 +144,6 @@ void main() {
         ).run();
         expect(profileResult.isRight(), true);
         profileResult.match((l) {}, (r) {
-          expect(r is RemoteProfileEntity, true);
           r.map(
             remote: (rp) {
               expect(rp.subInfo, isNotNull);
