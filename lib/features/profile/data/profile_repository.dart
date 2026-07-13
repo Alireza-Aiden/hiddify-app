@@ -231,13 +231,12 @@ class ProfileRepositoryImpl with ExceptionHandler, InfraLogger implements Profil
             () async => await tempFile.writeAsString(nContent),
             ProfileFailure.unexpected,
           ).flatMap(
-            (_) =>
-                TaskEither.fromEither(
-                  _profileParser.offlineUpdate(
-                    profile: oProfile.copyWith(userOverride: profile.userOverride),
-                    tempFilePath: tempFile.path,
-                  ),
-                ).flatMap(
+            (_) => _profileParser
+                .offlineUpdate(
+                  profile: oProfile.copyWith(userOverride: profile.userOverride),
+                  tempFilePath: tempFile.path,
+                )
+                .flatMap(
                   (profEntity) =>
                       validateConfig(
                         file.path,

@@ -9,8 +9,8 @@ void main() {
   const validSupportUrl = "https://example.com/support";
 
   group("parse", () {
-    test("Should use filename in url with no headers and fragment", () {
-      final profile = ProfileParser.parse(
+    test("Should use filename in url with no headers and fragment", () async {
+      final profileResult = await ProfileParser.parse(
         tempFilePath: '',
         profile: ProfileEntity.remote(
           id: const Uuid().v4(),
@@ -19,9 +19,9 @@ void main() {
           url: validBaseUrl,
           lastUpdate: DateTime.now(),
         ),
-      );
-      expect(profile.isRight(), true);
-      profile.match((l) {}, (r) {
+      ).run();
+      expect(profileResult.isRight(), true);
+      profileResult.match((l) {}, (r) {
         expect(r is RemoteProfileEntity, true);
         r.map(
           remote: (rp) {
@@ -35,8 +35,8 @@ void main() {
       });
     });
 
-    test("Should use fragment in url with no headers", () {
-      final profile = ProfileParser.parse(
+    test("Should use fragment in url with no headers", () async {
+      final profileResult = await ProfileParser.parse(
         tempFilePath: '',
         profile: ProfileEntity.remote(
           id: const Uuid().v4(),
@@ -45,9 +45,9 @@ void main() {
           url: validExtendedUrl,
           lastUpdate: DateTime.now(),
         ),
-      );
-      expect(profile.isRight(), true);
-      profile.match((l) {}, (r) {
+      ).run();
+      expect(profileResult.isRight(), true);
+      profileResult.match((l) {}, (r) {
         expect(r is RemoteProfileEntity, true);
         r.map(
           remote: (rp) {
@@ -61,7 +61,7 @@ void main() {
       });
     });
 
-    test("Should use base64 title in headers", () {
+    test("Should use base64 title in headers", () async {
       final headers = <String, List<String>>{
         "profile-title": ["base64:ZXhhbXBsZVRpdGxl"],
         "profile-update-interval": ["1"],
@@ -78,8 +78,8 @@ void main() {
       });
       final allHeaders = ProfileParser.populateHeaders(content: '', remoteHeaders: fixedHeaders);
       expect(allHeaders.isRight(), true);
-      allHeaders.match((l) {}, (r) {
-        final profile = ProfileParser.parse(
+      await allHeaders.match((l) async {}, (r) async {
+        final profileResult = await ProfileParser.parse(
           tempFilePath: '',
           profile: ProfileEntity.remote(
             id: const Uuid().v4(),
@@ -89,9 +89,9 @@ void main() {
             lastUpdate: DateTime.now(),
             populatedHeaders: r,
           ),
-        );
-        expect(profile.isRight(), true);
-        profile.match((l) {}, (r) {
+        ).run();
+        expect(profileResult.isRight(), true);
+        profileResult.match((l) {}, (r) {
           expect(r is RemoteProfileEntity, true);
           r.map(
             remote: (rp) {
@@ -118,7 +118,7 @@ void main() {
       });
     });
 
-    test("Should use infinite when given 0 for subscription properties", () {
+    test("Should use infinite when given 0 for subscription properties", () async {
       final headers = <String, List<String>>{
         "profile-title": ["title"],
         "profile-update-interval": ["1"],
@@ -133,8 +133,8 @@ void main() {
       });
       final allHeaders = ProfileParser.populateHeaders(content: '', remoteHeaders: fixedHeaders);
       expect(allHeaders.isRight(), true);
-      allHeaders.match((l) {}, (r) {
-        final profile = ProfileParser.parse(
+      await allHeaders.match((l) async {}, (r) async {
+        final profileResult = await ProfileParser.parse(
           tempFilePath: '',
           profile: RemoteProfileEntity(
             id: const Uuid().v4(),
@@ -144,9 +144,9 @@ void main() {
             lastUpdate: DateTime.now(),
             populatedHeaders: r,
           ),
-        );
-        expect(profile.isRight(), true);
-        profile.match((l) {}, (r) {
+        ).run();
+        expect(profileResult.isRight(), true);
+        profileResult.match((l) {}, (r) {
           expect(r is RemoteProfileEntity, true);
           r.map(
             remote: (rp) {
