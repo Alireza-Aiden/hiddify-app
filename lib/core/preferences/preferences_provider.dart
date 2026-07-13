@@ -18,7 +18,9 @@ Future<SharedPreferences> sharedPreferences(Ref ref) async {
 
   logger.debug("initializing preferences");
   try {
-    if (PlatformUtils.isWindows && Environment.isPortable) SharedPreferences.setPrefix('portable.');
+    if (PlatformUtils.isWindows && Environment.isPortable) {
+      SharedPreferences.setPrefix('portable.');
+    }
     sharedPreferences = await SharedPreferences.getInstance();
   } catch (e) {
     logger.error("error initializing preferences", e);
@@ -28,8 +30,8 @@ Future<SharedPreferences> sharedPreferences(Ref ref) async {
     // https://github.com/flutter/flutter/issues/89211
     final directory = await getApplicationSupportDirectory();
     final file = File(p.join(directory.path, 'shared_preferences.json'));
-    if (file.existsSync()) {
-      file.deleteSync();
+    if (await file.exists()) {
+      await file.delete();
     }
   }
 
