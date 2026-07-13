@@ -117,17 +117,19 @@ class ConfigOptionNotifier extends _$ConfigOptionNotifier with AppLogger {
 
   Future<void> _importJson(String input) async {
     if (jsonDecode(input) case final Map<String, dynamic> map) {
-      for (final option in ConfigOptions.preferences.entries) {
-        final query = option.key.split('.').map((e) => '["$e"]').join();
-        final res = JsonPath('\$$query').read(map).firstOrNull;
-        if (res?.value case final value?) {
-          try {
-            await ref.read(option.value.notifier).updateRaw(value);
-          } catch (e) {
-            loggy.debug("error updating [${option.key}]: $e", e);
+      await Future.wait(
+        ConfigOptions.preferences.entries.map((option) async {
+          final query = option.key.split('.').map((e) => '["$e"]').join();
+          final res = JsonPath('\$$query').read(map).firstOrNull;
+          if (res?.value case final value?) {
+            try {
+              await ref.read(option.value.notifier).updateRaw(value);
+            } catch (e) {
+              loggy.debug("error updating [${option.key}]: $e", e);
+            }
           }
-        }
-      }
+        }),
+      );
     }
   }
 
@@ -165,9 +167,11 @@ class ConfigOptionNotifier extends _$ConfigOptionNotifier with AppLogger {
   }
 
   Future<void> resetOption() async {
-    for (final option in ConfigOptions.preferences.values) {
-      await ref.read(option.notifier).reset();
-    }
+    await Future.wait(
+      ConfigOptions.preferences.values.map(
+        (option) => ref.read(option.notifier).reset(),
+      ),
+    );
     ref.invalidateSelf();
   }
 }
