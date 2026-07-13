@@ -42,10 +42,10 @@ class AppDirectories extends _$AppDirectories with InfraLogger {
       dirs = (baseDir: baseDir, workingDir: workingDir!, tempDir: tempDir);
     }
 
-    if (!await dirs.baseDir.exists()) {
+    if (!dirs.baseDir.existsSync()) {
       await dirs.baseDir.create(recursive: true);
     }
-    if (!await dirs.workingDir.exists()) {
+    if (!dirs.workingDir.existsSync()) {
       await dirs.workingDir.create(recursive: true);
     }
 
@@ -56,7 +56,7 @@ class AppDirectories extends _$AppDirectories with InfraLogger {
     try {
       final extDir = await getExternalStorageDirectory();
       if (extDir == null) return getApplicationDocumentsDirectory();
-      if (await extDir.exists()) return extDir;
+      if (extDir.existsSync()) return extDir;
       await extDir.create(recursive: true);
       return extDir;
     } catch (_) {}
